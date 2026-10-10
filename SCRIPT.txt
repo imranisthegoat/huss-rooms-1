@@ -1,0 +1,191 @@
+
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+
+if not Rayfield then
+    error("Rayfield failed to load")
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+
+local Window = Rayfield:CreateWindow({
+    name = "IMMIE HUB",
+    subtitle = "Huss rooms 1",
+    sidebarLayout = true,
+})
+
+local Tab = Window:CreateTab({
+    name = "Main",
+})
+
+local autoFarm = false
+local floatConnection
+local walkConnection
+local noclipConnection
+
+local function getCharacter()
+    local character = player.Character
+
+    if not character then
+        character = player.CharacterAdded:Wait()
+    end
+
+    if not character then
+        return nil, nil
+    end
+
+    local root = character:FindFirstChild("HumanoidRootPart")
+
+    if not root then
+        root = character:WaitForChild("HumanoidRootPart", 5)
+    end
+
+    return character, root
+end
+
+local function stopFarm()
+    autoFarm = false
+
+    if floatConnection then
+        floatConnection:Disconnect()
+        floatConnection = nil
+    end
+
+    if walkConnection then
+        walkConnection:Disconnect()
+        walkConnection = nil
+    end
+
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(
+            false,
+            Enum.KeyCode.W,
+            false,
+            game
+        )
+    end)
+
+    local character = player.Character
+
+    if character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+Tab:CreateToggle({
+    name = "Auto Farm",
+    callback = function(value)
+        stopFarm()
+
+        if not value then
+            return
+        end
+
+        autoFarm = true
+
+        floatConnection = RunService.Heartbeat:Connect(function()
+            if not autoFarm then
+                return
+            end
+
+            local character = player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+
+            if root then
+                local velocity = root.AssemblyLinearVelocity
+                root.AssemblyLinearVelocity = Vector3.new(
+                    velocity.X,
+                    (40 - root.Position.Y) * 5,
+                    velocity.Z
+                )
+            end
+        end)
+
+        walkConnection = RunService.Heartbeat:Connect(function()
+            if not autoFarm then
+                return
+            end
+
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(
+                    true,
+                    Enum.KeyCode.W,
+                    false,
+                    game
+                )
+            end)
+        end)
+
+        noclipConnection = RunService.Stepped:Connect(function()
+            if not autoFarm then
+                return
+            end
+
+            local character = player.Character
+
+            if character then
+                for _, part in ipairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end,
+})
+
+Tab:CreateButton({
+    name = "TP to Safe Zone",
+    callback = function()
+        local success, err = pcall(function()
+            local zoneFolder = workspace:FindFirstChild("Zone")
+
+            if not zoneFolder then
+                error("workspace.Zone was not found")
+            end
+
+            local zones = zoneFolder:GetChildren()
+            local target = zones[10]
+
+            if not target then
+                error("Zone child 10 was not found")
+            end
+
+            local character, root = getCharacter()
+
+            if not character or not root then
+                error("Character or HumanoidRootPart not found")
+            end
+
+            if target:IsA("BasePart") then
+                root.CFrame = target.CFrame + Vector3.new(0, 3, 0)
+            elseif target:IsA("Model") then
+                root.CFrame = target:GetPivot() + Vector3.new(0, 3, 0)
+            else
+                error("Zone child 10 is not a BasePart or Model")
+            end
+        end)
+
+        if not success then
+            warn("IMMIE HUB teleport error: " .. tostring(err))
+        end
+    end,
+})
+
+player.CharacterAdded:Connect(function()
+    if autoFarm then
+        task.wait(1)
+    end
+end)
